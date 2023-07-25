@@ -41,36 +41,51 @@ NP_DTYPE = [
 def get(path):
     return requests.get(f"{sigfox_endpoint}/{path}").json()
 
+
 def add_login_password_to_url(url, login, password):
     parsed_url = urlparse(url)
     updated_netloc = f"{login}:{password}@{parsed_url.hostname}"
     if parsed_url.port:
         updated_netloc += f":{parsed_url.port}"
-    updated_url = urlunparse((parsed_url.scheme, updated_netloc, parsed_url.path,
-                              parsed_url.params, parsed_url.query, parsed_url.fragment))
+    updated_url = urlunparse(
+        (
+            parsed_url.scheme,
+            updated_netloc,
+            parsed_url.path,
+            parsed_url.params,
+            parsed_url.query,
+            parsed_url.fragment,
+        )
+    )
     return updated_url
 
-def get_one_page_msgs(url = None):
+
+def get_one_page_msgs(url=None):
     if url == None:
         messages = get(f"devices/{sigfox_devid}/messages")
     else:
         messages = requests.get(
-                add_login_password_to_url(url, sigfox_login, sigfox_pswd)
-            ).json()
+            add_login_password_to_url(url, sigfox_login, sigfox_pswd)
+        ).json()
     nextLink = messages["paging"].get("next")
-    return (np.array(
-        list(
-            map(
-                lambda x: (
-                    int(x["time"]),
-                    int(x["data"], 16).to_bytes(4, "big"),
-                    int(x["seqNumber"]),
-                    int(x["lqi"]),
-                ),
-                messages["data"],
-            )
-        ), dtype = NP_DTYPE
-    ), nextLink)
+    return (
+        np.array(
+            list(
+                map(
+                    lambda x: (
+                        int(x["time"]),
+                        int(x["data"], 16).to_bytes(4, "big"),
+                        int(x["seqNumber"]),
+                        int(x["lqi"]),
+                    ),
+                    messages["data"],
+                )
+            ),
+            dtype=NP_DTYPE,
+        ),
+        nextLink,
+    )
+
 
 def get_all_pages_msgs():
     allmsgs = []
@@ -84,6 +99,7 @@ def get_all_pages_msgs():
         else:
             time.sleep(1)
     return np.concatenate(allmsgs)
+
 
 def write_msgs_to_hdf5(hdf5_file, data):
     with h5py.File(hdf5_file, "w") as file:
@@ -170,7 +186,7 @@ def make_clean_dir(dir_path):
 
 def download_seasons(seasons):
     make_clean_dir("downloads")
-    files = [ f for f in (list_files_in_bucket() or []) if f[:-5] in seasons]
+    files = [f for f in (list_files_in_bucket() or []) if f[:-5] in seasons]
     print(f"[LOG] bucket files: {files}")
     for f in files:
         path = f"downloads/{f}"
@@ -205,12 +221,13 @@ def merge_by_seqnum(arr1, arr2):
     unique_merged_array = merged_array[unique_indices]
     return unique_merged_array, new
 
+
 msgs = sorted(
-        map(
-            lambda x: (datetime.fromtimestamp(x[0] // 1000, timezone.utc), *x[1:]),
-            get_all_pages_msgs().tolist(),
-        )
+    map(
+        lambda x: (datetime.fromtimestamp(x[0] // 1000, timezone.utc), *x[1:]),
+        get_all_pages_msgs().tolist(),
     )
+)
 seasons = set(map(lambda x: f"{get_season(x[0])}-{x[0].year}", msgs))
 seasons_historic = download_seasons_historic(seasons)
 print(f"[LOG] seasons_historic: {seasons_historic}")
