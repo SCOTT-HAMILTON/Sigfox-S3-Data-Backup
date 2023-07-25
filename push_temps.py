@@ -216,7 +216,7 @@ def download_seasons_historic(seasons):
 def merge_by_seqnum(arr1, arr2):
     merged_array = np.concatenate((arr1, arr2))
     merged_array.sort(order="seqNum")
-    unique_indices = np.unique(merged_array["seqNum"], return_index=True)[1]
+    unique_indices = np.unique(merged_array["timestamp"], return_index=True)[1]
     new = 2 * len(unique_indices) - len(merged_array)
     unique_merged_array = merged_array[unique_indices]
     return unique_merged_array, new
@@ -226,11 +226,11 @@ msgs = sorted(
     map(
         lambda x: (datetime.fromtimestamp(x[0] // 1000, timezone.utc), *x[1:]),
         get_all_pages_msgs().tolist(),
-    )
+    ),
+    key=lambda x: x[0],
 )
 seasons = set(map(lambda x: f"{get_season(x[0])}-{x[0].year}", msgs))
 seasons_historic = download_seasons_historic(seasons)
-print(f"[LOG] seasons_historic: {seasons_historic}")
 classified_msgs = classify_messages_by_season_year(msgs)
 for season, msgs in classified_msgs.items():
     make_clean_dir("results")
@@ -238,7 +238,8 @@ for season, msgs in classified_msgs.items():
     if historic is None:
         historic = np.empty(shape=(0,), dtype=NP_DTYPE)
     mergedmsgs, new = merge_by_seqnum(np.array(msgs, dtype=NP_DTYPE), historic)
-    print(f"[LOG] added {new} new entries to {season}")
+    print(f"[LOG] {season}:\n{mergedmsgs}")
+    print(f"[LOG] added {new} new entrie{'s' if new != 1 else ''} to {season}")
     write_msgs_to_hdf5(f"results/{season}.hdf5", mergedmsgs)
     delete_file_from_bucket(f"{season}.hdf5")
     upload_file_to_bucket(f"results/{season}.hdf5", f"{season}.hdf5")
