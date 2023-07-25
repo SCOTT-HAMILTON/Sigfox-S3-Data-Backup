@@ -3,7 +3,6 @@ from datetime import datetime, timezone
 from pprint import pprint
 import boto3
 from urllib.parse import urlparse, urlunparse
-import codecs
 import h5py
 import json
 import numpy as np
@@ -33,7 +32,7 @@ s3_client = boto3.client(
 H5_DATASET_NAME = "lanloup_temps"
 NP_DTYPE = [
     ("timestamp", np.ulonglong),
-    ("data", "<S8"),
+    ("data", "|V4"),
     ("seqNum", np.ulonglong),
     ("lqi", np.short),
 ]
@@ -64,14 +63,13 @@ def get_one_page_msgs(url = None):
             map(
                 lambda x: (
                     int(x["time"]),
-                    codecs.decode(x["data"], "hex_codec"),
+                    int(x["data"], 16).to_bytes(4, "big"),
                     int(x["seqNumber"]),
                     int(x["lqi"]),
                 ),
                 messages["data"],
             )
-        ),
-        dtype=NP_DTYPE,
+        ), dtype = NP_DTYPE
     ), nextLink)
 
 def get_all_pages_msgs():
@@ -207,7 +205,6 @@ def merge_by_seqnum(arr1, arr2):
     unique_merged_array = merged_array[unique_indices]
     return unique_merged_array, new
 
-
 msgs = sorted(
         map(
             lambda x: (datetime.fromtimestamp(x[0] // 1000, timezone.utc), *x[1:]),
@@ -223,7 +220,7 @@ for season, msgs in classified_msgs.items():
     historic = seasons_historic.get(season)
     if historic is None:
         historic = np.empty(shape=(0,), dtype=NP_DTYPE)
-    mergedmsgs, new = merge_by_seqnum(historic, np.array(msgs, dtype=NP_DTYPE))
+    mergedmsgs, new = merge_by_seqnum(np.array(msgs, dtype=NP_DTYPE), historic)
     print(f"[LOG] added {new} new entries to {season}")
     write_msgs_to_hdf5(f"results/{season}.hdf5", mergedmsgs)
     delete_file_from_bucket(f"{season}.hdf5")
