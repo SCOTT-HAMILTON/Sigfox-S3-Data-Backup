@@ -18,10 +18,10 @@ sigfox_pswd = auth["sigfox"]["password"]
 sigfox_devid = auth["sigfox"]["deviceId"]
 sigfox_endpoint = f"https://{sigfox_login}:{sigfox_pswd}@api.sigfox.com/v2"
 
-s3_endpoint = "https://s3.filebase.com"
-aws_access_key_id = auth["filebase-s3"]["accessKeyId"]
-aws_secret_access_key = auth["filebase-s3"]["secretAccessKey"]
-bucket_name = auth["filebase-s3"]["bucketName"]
+s3_endpoint = auth["s3"]["endpoint"]
+aws_access_key_id = auth["s3"]["accessKeyId"]
+aws_secret_access_key = auth["s3"]["secretAccessKey"]
+bucket_name = auth["s3"]["bucketName"]
 s3_client = boto3.client(
     "s3",
     endpoint_url=s3_endpoint,
