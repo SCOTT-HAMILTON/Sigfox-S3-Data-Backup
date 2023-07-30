@@ -7,7 +7,6 @@ import h5py
 import json
 import numpy as np
 import os
-import pandas as pd
 import re
 import requests
 import shutil
@@ -86,11 +85,6 @@ def get_one_page_msgs(url=None):
         ),
         nextLink,
     )
-
-
-def pprint_np_array(array, max_rows=5):
-    df = pd.DataFrame(array)
-    print(df)
 
 
 def get_all_pages_msgs():
@@ -249,7 +243,7 @@ for season, msgs in classified_msgs.items():
         historic = np.empty(shape=(0,), dtype=NP_DTYPE)
     mergedmsgs, new = merge_by_seqnum(np.array(msgs, dtype=NP_DTYPE), historic)
     print(f"[LOG] {season}:")
-    pprint_np_array(mergedmsgs)
+    print(mergedmsgs)
     print(f"[LOG] added {new} new entr{'ies' if new != 1 else 'y'} to {season}")
     write_msgs_to_hdf5(f"results/{season}.hdf5", mergedmsgs)
     delete_file_from_bucket(f"{season}.hdf5")
