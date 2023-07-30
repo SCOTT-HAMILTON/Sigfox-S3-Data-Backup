@@ -1,12 +1,13 @@
 from collections import defaultdict
 from datetime import datetime, timezone
 from pprint import pprint
-import boto3
 from urllib.parse import urlparse, urlunparse
+import boto3
 import h5py
 import json
 import numpy as np
 import os
+import pandas as pd
 import re
 import requests
 import shutil
@@ -87,10 +88,17 @@ def get_one_page_msgs(url=None):
     )
 
 
+def pprint_np_array(array, max_rows=5):
+    df = pd.DataFrame(array)
+    print(df)
+
+
 def get_all_pages_msgs():
     allmsgs = []
     url = None
+    pages = 0
     while True:
+        pages += 1
         msgs, nextLink = get_one_page_msgs(url)
         allmsgs.append(msgs)
         url = nextLink
@@ -98,7 +106,9 @@ def get_all_pages_msgs():
             break
         else:
             time.sleep(1)
-    return np.concatenate(allmsgs)
+    results = np.concatenate(allmsgs)
+    print(f"[LOG] fetched {pages} pages for {results.shape[0]} messages.")
+    return results
 
 
 def write_msgs_to_hdf5(hdf5_file, data):
@@ -238,8 +248,9 @@ for season, msgs in classified_msgs.items():
     if historic is None:
         historic = np.empty(shape=(0,), dtype=NP_DTYPE)
     mergedmsgs, new = merge_by_seqnum(np.array(msgs, dtype=NP_DTYPE), historic)
-    print(f"[LOG] {season}:\n{mergedmsgs}")
-    print(f"[LOG] added {new} new entrie{'s' if new != 1 else ''} to {season}")
+    print(f"[LOG] {season}:")
+    pprint_np_array(mergedmsgs)
+    print(f"[LOG] added {new} new entr{'ies' if new != 1 else 'y'} to {season}")
     write_msgs_to_hdf5(f"results/{season}.hdf5", mergedmsgs)
     delete_file_from_bucket(f"{season}.hdf5")
     upload_file_to_bucket(f"results/{season}.hdf5", f"{season}.hdf5")
