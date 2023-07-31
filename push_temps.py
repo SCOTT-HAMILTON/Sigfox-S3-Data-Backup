@@ -217,13 +217,20 @@ def download_seasons_historic(seasons):
     return seasons_dict
 
 
-def merge_by_seqnum(arr1, arr2):
+def merge_by_timestamp(arr1, arr2):
     merged_array = np.concatenate((arr1, arr2))
-    merged_array.sort(order="seqNum")
+    merged_array.sort(order="timestamp")
     unique_indices = np.unique(merged_array["timestamp"], return_index=True)[1]
     new = 2 * len(unique_indices) - len(merged_array)
     unique_merged_array = merged_array[unique_indices]
     return unique_merged_array, new
+
+
+def print_np_array(array, max_lines=5):
+    if array.shape[0] < max_lines * 2:
+        print(array)
+    else:
+        print(np.concatenate((array[:max_lines], array[-max_lines:])))
 
 
 msgs = sorted(
@@ -241,9 +248,9 @@ for season, msgs in classified_msgs.items():
     historic = seasons_historic.get(season)
     if historic is None:
         historic = np.empty(shape=(0,), dtype=NP_DTYPE)
-    mergedmsgs, new = merge_by_seqnum(np.array(msgs, dtype=NP_DTYPE), historic)
+    mergedmsgs, new = merge_by_timestamp(np.array(msgs, dtype=NP_DTYPE), historic)
     print(f"[LOG] {season}:")
-    print(mergedmsgs)
+    print_np_array(mergedmsgs)
     print(f"[LOG] added {new} new entr{'ies' if new != 1 else 'y'} to {season}")
     write_msgs_to_hdf5(f"results/{season}.hdf5", mergedmsgs)
     delete_file_from_bucket(f"{season}.hdf5")
