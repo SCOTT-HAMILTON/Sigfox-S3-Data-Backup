@@ -2,6 +2,7 @@ from collections import defaultdict
 from datetime import datetime, timezone
 from pprint import pprint
 from urllib.parse import urlparse, urlunparse
+import base64
 import boto3
 import h5py
 import json
@@ -12,7 +13,10 @@ import requests
 import shutil
 import time
 
-auth = json.load(open("auth.json", "r"))
+if os.environ.get("FOX_BACKUP_CONF") is None:
+    auth = json.load(open("auth.json", "r"))
+else:
+    auth = json.loads(base64.b64decode(os.environ.get("FOX_BACKUP_CONF")))
 sigfox_login = auth["sigfox"]["login"]
 sigfox_pswd = auth["sigfox"]["password"]
 sigfox_devid = auth["sigfox"]["deviceId"]

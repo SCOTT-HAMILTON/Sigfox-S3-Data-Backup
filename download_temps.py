@@ -1,4 +1,5 @@
 from pprint import pprint
+import base64
 import boto3
 import json
 import os
@@ -6,7 +7,10 @@ import re
 import requests
 import shutil
 
-auth = json.load(open("auth.json", "r"))
+if os.environ.get("FOX_BACKUP_CONF") is None:
+    auth = json.load(open("auth.json", "r"))
+else:
+    auth = json.loads(base64.b64decode(os.environ.get("FOX_BACKUP_CONF")))
 
 s3_endpoint = auth["s3"]["endpoint"]
 aws_access_key_id = auth["s3"]["accessKeyId"]
