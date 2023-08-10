@@ -170,7 +170,8 @@ def download_file_from_bucket(object_name, output_file_path):
         s3_client.download_file(bucket_name, object_name, output_file_path)
         print("File downloaded successfully.")
     except Exception as e:
-        print("Failed to download the file:", e)
+        print(f"Failed to download the file {object_name}:", e)
+        raise e
 
 
 def delete_file_from_bucket(file_path):
@@ -205,11 +206,13 @@ def download_seasons(seasons):
 def read_hdf5_to_numpy(file_path, dataset_name):
     try:
         with h5py.File(file_path, "r") as hdf_file:
+            if not hdf_file:
+                return None
             dataset = hdf_file[dataset_name][:]
             return np.array(dataset)
     except Exception as e:
         print("Error reading the HDF5 file:", e)
-        return None
+        raise e
 
 
 def download_seasons_historic(seasons):
@@ -217,7 +220,8 @@ def download_seasons_historic(seasons):
     seasons_dict = dict()
     for f in downloaded_files:
         path = f"downloads/{f}"
-        seasons_dict[f[:-5]] = read_hdf5_to_numpy(path, H5_DATASET_NAME)
+        data = read_hdf5_to_numpy(path, H5_DATASET_NAME)
+        seasons_dict[f[:-5]] = data
     return seasons_dict
 
 
@@ -237,15 +241,27 @@ def print_np_array(array, max_lines=5):
         print(np.concatenate((array[:max_lines], array[-max_lines:])))
 
 
-msgs = sorted(
-    map(
-        lambda x: (datetime.fromtimestamp(x[0] // 1000, timezone.utc), *x[1:]),
-        get_all_pages_msgs().tolist(),
-    ),
-    key=lambda x: x[0],
-)
+msgs = None
+try:
+    msgs = sorted(
+        map(
+            lambda x: (datetime.fromtimestamp(x[0] // 1000, timezone.utc), *x[1:]),
+            get_all_pages_msgs().tolist(),
+        ),
+        key=lambda x: x[0],
+    )
+except Exception as e:
+    print(f"[FATAL] couldn't fetch msgs: {e}, exitting...")
+    quit()
+
 seasons = set(map(lambda x: f"{get_season(x[0])}-{x[0].year}", msgs))
-seasons_historic = download_seasons_historic(seasons)
+seasons_historic = None
+try:
+    seasons_historic = download_seasons_historic(seasons)
+except Exception as e:
+    print(f"[FATAL] couldn't fetch season's historic: {e}, quitting...")
+    quit()
+
 classified_msgs = classify_messages_by_season_year(msgs)
 for season, msgs in classified_msgs.items():
     make_clean_dir("results")
