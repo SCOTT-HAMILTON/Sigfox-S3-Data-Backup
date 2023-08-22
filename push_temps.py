@@ -45,7 +45,6 @@ NP_DTYPE = [
 def get(path):
     return requests.get(f"{sigfox_endpoint}/{path}").json()
 
-
 def add_login_password_to_url(url, login, password):
     parsed_url = urlparse(url)
     updated_netloc = f"{login}:{password}@{parsed_url.hostname}"
@@ -229,7 +228,12 @@ def merge_by_timestamp(arr1, arr2):
     merged_array = np.concatenate((arr1, arr2))
     merged_array.sort(order="timestamp")
     unique_indices = np.unique(merged_array["timestamp"], return_index=True)[1]
-    new = 2 * len(unique_indices) - len(merged_array)
+
+    def count_new():
+        mask = ~np.isin(arr1, arr2)
+        return len(arr1[mask])
+
+    new = count_new()
     unique_merged_array = merged_array[unique_indices]
     return unique_merged_array, new
 
