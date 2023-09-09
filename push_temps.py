@@ -276,6 +276,9 @@ for season, msgs in classified_msgs.items():
     print(f"[LOG] {season}:")
     print_np_array(mergedmsgs)
     print(f"[LOG] added {new} new entr{'ies' if new != 1 else 'y'} to {season}")
-    write_msgs_to_hdf5(f"results/{season}.hdf5", mergedmsgs)
-    delete_file_from_bucket(f"{season}.hdf5")
-    upload_file_to_bucket(f"results/{season}.hdf5", f"{season}.hdf5")
+    if new > 0:
+        write_msgs_to_hdf5(f"results/{season}.hdf5", mergedmsgs)
+        delete_file_from_bucket(f"{season}.hdf5")
+        upload_file_to_bucket(f"results/{season}.hdf5", f"{season}.hdf5")
+    else:
+        print(f"[LOG] {season} skipped, nothing added")
