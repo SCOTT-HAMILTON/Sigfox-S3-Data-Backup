@@ -1,14 +1,22 @@
+from collections import defaultdict
+from datetime import datetime, timezone
 from pprint import pprint
+from urllib.parse import urlparse, urlunparse
 import base64
 import boto3
+import h5py
 import json
+import numpy as np
 import os
 import re
 import requests
 import shutil
+import time
+
+auth_file = "auth.json"
 
 if os.environ.get("FOX_BACKUP_CONF") is None:
-    auth = json.load(open("auth.json", "r"))
+    auth = json.load(open(auth_file, "r"))
 else:
     auth = json.loads(base64.b64decode(os.environ.get("FOX_BACKUP_CONF")))
 
@@ -24,18 +32,6 @@ s3_client = boto3.client(
     aws_secret_access_key=aws_secret_access_key,
 )
 
-
-def list_files_in_bucket():
-    pattern = r"(Printemps|Été|Automne|Hiver)-\d{4}\.hdf5"
-    response = s3_client.list_objects_v2(Bucket=bucket_name)
-    if "Contents" in response:
-        data = [obj["Key"] for obj in response["Contents"]]
-        return list(filter(lambda f: re.fullmatch(pattern, f) != None, data))
-    else:
-        print("Failed to list files.")
-        return None
-
-
 def download_cid(cid, output_file_path):
     url = f"{ipfs_endpoint}/{cid}"
     with requests.get(url, stream=True) as r:
@@ -48,26 +44,11 @@ def download_file_from_bucket(object_name, output_file_path):
             Bucket=bucket_name,
             Key=object_name,
         ).get("Metadata").get("cid")
+        print(f"{cid}")
         download_cid(cid, output_file_path)
         print(f"File {bucket_name}/{object_name} downloaded successfully.")
     except Exception as e:
         print(f"Failed to download the file {object_name}:", e)
         raise e
 
-def make_clean_dir(dir_path):
-    try:
-        shutil.rmtree(dir_path)
-    except (FileExistsError, FileNotFoundError):
-        pass
-    try:
-        os.makedirs(dir_path)
-    except (FileExistsError, FileNotFoundError):
-        pass
-
-
-make_clean_dir("downloads_backup")
-files = list_files_in_bucket()
-print(f"[LOG] bucket files: {files}")
-for f in files:
-    path = f"downloads_backup/{f}"
-    download_file_from_bucket(f, path)
+download_file_from_bucket("Automne-2023.hdf5", "downloads_backup/Automne-2023.hdf5")

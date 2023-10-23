@@ -2,6 +2,7 @@ from collections import defaultdict
 from datetime import datetime, timezone
 from pprint import pprint
 from urllib.parse import urlparse, urlunparse
+import argparse
 import base64
 import boto3
 import h5py
@@ -13,8 +14,18 @@ import requests
 import shutil
 import time
 
+parser = argparse.ArgumentParser(
+    description="Python script to push sigfox temps to s3"
+)
+parser.add_argument("--auth", type=str, help="Path to the auth json file")
+parser.add_argument("--debug-data", type=str, help="Path to the debug json file")
+parser.add_argument("-d", "--debug", help="Debug mode",
+                    action="store_true")
+args = parser.parse_args()
+auth_file = args.auth or "auth.json"
+
 if os.environ.get("FOX_BACKUP_CONF") is None:
-    auth = json.load(open("auth.json", "r"))
+    auth = json.load(open(auth_file, "r"))
 else:
     auth = json.loads(base64.b64decode(os.environ.get("FOX_BACKUP_CONF")))
 sigfox_login = auth["sigfox"]["login"]
@@ -26,6 +37,7 @@ s3_endpoint = auth["s3"]["endpoint"]
 aws_access_key_id = auth["s3"]["accessKeyId"]
 aws_secret_access_key = auth["s3"]["secretAccessKey"]
 bucket_name = auth["s3"]["bucketName"]
+ipfs_endpoint = auth["s3"]["ipfsEndpoint"]
 s3_client = boto3.client(
     "s3",
     endpoint_url=s3_endpoint,
@@ -40,10 +52,19 @@ NP_DTYPE = [
     ("seqNum", np.ulonglong),
     ("lqi", np.short),
 ]
+NP_DTYPE_EXPORT = [
+    ("timestamp", np.ulonglong),
+    ("data", np.string_),
+    ("seqNum", np.ulonglong),
+    ("lqi", np.short),
+]
 
 
-def get(path):
-    return requests.get(f"{sigfox_endpoint}/{path}").json()
+def get(url, fullUrl = False):
+    if fullUrl:
+        return requests.get(url).json()
+    else:
+        return requests.get(f"{sigfox_endpoint}/{url}").json()
 
 def add_login_password_to_url(url, login, password):
     parsed_url = urlparse(url)
@@ -67,8 +88,9 @@ def get_one_page_msgs(url=None):
     if url == None:
         messages = get(f"devices/{sigfox_devid}/messages")
     else:
-        messages = requests.get(
+        messages = get(
             add_login_password_to_url(url, sigfox_login, sigfox_pswd)
+            ,fullUrl = True
         ).json()
     nextLink = messages["paging"].get("next")
     return (
@@ -91,6 +113,11 @@ def get_one_page_msgs(url=None):
 
 
 def get_all_pages_msgs():
+    if args.debug_data:
+        with open(args.debug_data, 'rb') as f:
+            results = np.load(f)
+            print(f"[LOG] Loaded results ({results.shape[0]} msgs) directly from {args.debug_data}:\n{results[0]}")
+            return results
     allmsgs = []
     url = None
     pages = 0
@@ -105,6 +132,11 @@ def get_all_pages_msgs():
             time.sleep(1)
     results = np.concatenate(allmsgs)
     print(f"[LOG] fetched {pages} pages for {results.shape[0]} messages.")
+    if args.debug:
+        dbg_msg = "debug-msgs.npy"
+        with open(dbg_msg, 'wb') as f:
+            np.save(f, results)
+        print(f"[DEBUG] messages saved for debugging to {dbg_msg}")
     return results
 
 
@@ -159,19 +191,27 @@ def list_files_in_bucket():
 def upload_file_to_bucket(file_path, object_name):
     try:
         s3_client.upload_file(file_path, bucket_name, object_name)
-        print("File uploaded successfully.")
+        print(f"File {bucket_name}/{object_name} uploaded successfully.")
     except Exception as e:
-        print("Failed to upload the file:", e)
+        print(f"Failed to upload {bucket_name}/{object_name}@{file_path}:", e)
 
+def download_cid(cid, output_file_path):
+    url = f"{ipfs_endpoint}/{cid}"
+    with requests.get(url, stream=True) as r:
+        with open(output_file_path, 'wb') as f:
+            shutil.copyfileobj(r.raw, f)
 
 def download_file_from_bucket(object_name, output_file_path):
     try:
-        s3_client.download_file(bucket_name, object_name, output_file_path)
-        print("File downloaded successfully.")
+        cid = s3_client.head_object(
+            Bucket=bucket_name,
+            Key=object_name,
+        ).get("Metadata").get("cid")
+        download_cid(cid, output_file_path)
+        print(f"File {bucket_name}/{object_name} downloaded successfully.")
     except Exception as e:
         print(f"Failed to download the file {object_name}:", e)
         raise e
-
 
 def delete_file_from_bucket(file_path):
     try:
@@ -273,7 +313,7 @@ for season, msgs in classified_msgs.items():
     if historic is None:
         historic = np.empty(shape=(0,), dtype=NP_DTYPE)
     mergedmsgs, new = merge_by_timestamp(np.array(msgs, dtype=NP_DTYPE), historic)
-    print(f"[LOG] {season}:")
+    print(f"[LOG] {season} ({len(msgs)} msgs from sigfox, {len(historic)} from s3):")
     print_np_array(mergedmsgs)
     print(f"[LOG] added {new} new entr{'ies' if new != 1 else 'y'} to {season}")
     if new > 0:
