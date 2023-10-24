@@ -91,7 +91,7 @@ def get_one_page_msgs(url=None):
         messages = get(
             add_login_password_to_url(url, sigfox_login, sigfox_pswd)
             ,fullUrl = True
-        ).json()
+        )
     nextLink = messages["paging"].get("next")
     return (
         np.array(
